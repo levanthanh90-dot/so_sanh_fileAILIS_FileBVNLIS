@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Đối soát & Truy vấn Dữ liệu Địa chính (VNLIS - ILIS)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS with Styling Support (xlsx-js-style) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .drop-zone-active {
+            border-color: #2563eb !important;
+            background-color: #eff6ff !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg shadow-inner">
+                    <i class="ph ph-database text-2xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight leading-tight">CÔNG CỤ ĐỐI SOÁT DỮ LIỆU ĐỊA CHÍNH</h1>
+                    <p class="text-xs text-slate-400">Truy vấn chênh lệch VNLIS (Form TK cả nước) vs ILIS (TongHop)</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span id="memory-badge" class="hidden sm:inline-flex items-center gap-1.5 text-xs bg-slate-800/90 text-emerald-400 px-3 py-1.5 rounded-lg border border-slate-700 font-mono" title="Trạng thái tối ưu bộ nhớ">
+                    <i class="ph ph-cpu text-sm"></i>
+                    <span id="memory-status-text">RAM: Sẵn sàng</span>
+                </span>
+                <button onclick="resetAll()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="ph ph-arrow-counter-clockwise text-sm"></i>
+                    <span>Làm mới phiên làm việc</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Overlay / Bar for Large Files -->
+    <div id="progress-banner" class="hidden bg-blue-50 border-b border-blue-200 sticky top-16 z-20 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 text-xs font-semibold text-blue-900">
+                <i class="ph ph-spinner-gap animate-spin text-base text-blue-600"></i>
+                <span id="progress-label">Đang xử lý dữ liệu...</span>
+            </div>
+            <div class="flex items-center gap-3 w-full sm:w-72">
+                <div class="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                    <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-150" style="width: 0%"></div>
+                </div>
+                <span id="progress-percent" class="text-xs font-mono font-bold text-blue-800 w-10 text-right">0%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Notification Banner / Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md"></div>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Step 1: Upload Files -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">1</span>
+                    <h2 class="text-base font-bold text-slate-800">Tải lên dữ liệu nguồn (Excel / CSV)</h2>
+                </div>
+                <span class="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">Xử lý 100% cục bộ trên trình duyệt - Bảo mật tuyệt đối</span>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- File B Card (VNLIS) -->
+                <div class="border border-slate-200 rounded-xl p-5 bg-slate-50/50 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-800 bg-blue-100/80 px-3 py-1 rounded-full">
+                                <i class="ph ph-file-xls text-base"></i> FILE B: VNLIS (Dữ liệu gốc cần kiểm tra)
+                            </span>
+                            <span id="status-b" class="text-xs font-medium text-slate-400">Chưa tải file</span>
+                        </div>
+
+                        <div id="dropzone-b" onclick="document.getElementById('input-file-b').click()" 
+                             class="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer transition bg-white group">
+                            <input type="file" id="input-file-b" accept=".xls,.xlsx,.csv" class="hidden" onchange="handleFileUpload(event, 'B')">
+                            <i class="ph ph-cloud-arrow-up text-3xl text-slate-400 group-hover:text-blue-600 transition mb-2"></i>
+                            <p class="text-sm font-medium text-slate-700" id="filename-b">Nhấn để chọn hoặc kéo thả file <span class="text-blue-600 font-semibold">B_VNLIS.xls / .xlsx</span></p>
+                            <p class="text-xs text-slate-400 mt-1">Tự động nhận diện sheet chứa "Form TK cả nước"</p>
+                        </div>
+                    </div>
+
+                    <!-- File B Structure Config -->
+                    <div id="config-b" class="mt-4 pt-4 border-t border-slate-200 hidden space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="sm:col-span-1">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Sheet dữ liệu</label>
+                                <select id="sheet-b" onchange="onSheetChange('B')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Dòng tiêu đề (Mặc định: 1)</label>
+                                <input type="number" id="header-row-b" value="1" min="1" onchange="onRowConfigChange('B')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Dòng bắt đầu (Mặc định: 2)</label>
+                                <input type="number" id="data-row-b" value="2" min="1" onchange="onRowConfigChange('B')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <div id="info-b" class="text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-2">
+                            <i class="ph ph-check-circle text-base shrink-0"></i>
+                            <span>Đã nhận diện cấu trúc bảng.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File A Card (ILIS) -->
+                <div class="border border-slate-200 rounded-xl p-5 bg-slate-50/50 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-800 bg-indigo-100/80 px-3 py-1 rounded-full">
+                                <i class="ph ph-file-xls text-base"></i> FILE A: ILIS (Dữ liệu đối chiếu)
+                            </span>
+                            <span id="status-a" class="text-xs font-medium text-slate-400">Chưa tải file</span>
+                        </div>
+
+                        <div id="dropzone-a" onclick="document.getElementById('input-file-a').click()" 
+                             class="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-6 text-center cursor-pointer transition bg-white group">
+                            <input type="file" id="input-file-a" accept=".xls,.xlsx,.csv" class="hidden" onchange="handleFileUpload(event, 'A')">
+                            <i class="ph ph-cloud-arrow-up text-3xl text-slate-400 group-hover:text-indigo-600 transition mb-2"></i>
+                            <p class="text-sm font-medium text-slate-700" id="filename-a">Nhấn để chọn hoặc kéo thả file <span class="text-indigo-600 font-semibold">A_ILIS.xls / .xlsx</span></p>
+                            <p class="text-xs text-slate-400 mt-1">Tự động nhận diện sheet chứa "TongHop"</p>
+                        </div>
+                    </div>
+
+                    <!-- File A Structure Config -->
+                    <div id="config-a" class="mt-4 pt-4 border-t border-slate-200 hidden space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="sm:col-span-1">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Sheet dữ liệu</label>
+                                <select id="sheet-a" onchange="onSheetChange('A')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Dòng tiêu đề (Mặc định: 8)</label>
+                                <input type="number" id="header-row-a" value="8" min="1" onchange="onRowConfigChange('A')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Dòng bắt đầu (Mặc định: 10)</label>
+                                <input type="number" id="data-row-a" value="10" min="1" onchange="onRowConfigChange('A')" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <div id="info-a" class="text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-2">
+                            <i class="ph ph-check-circle text-base shrink-0"></i>
+                            <span>Đã nhận diện cấu trúc bảng.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 2: Join Keys & Filter Configuration -->
+        <section id="section-mapping" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 opacity-50 pointer-events-none transition-opacity duration-200">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+                <div class="flex items-center gap-2.5">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">2</span>
+                    <h2 class="text-base font-bold text-slate-800">Thiết lập Khóa liên kết & Điều kiện lọc trên File B</h2>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <input type="checkbox" id="opt-normalize-num" checked class="rounded text-blue-600 focus:ring-blue-500">
+                        <span>Chuẩn hóa số nguyên khóa liên kết (VD: "01" = "1")</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left: Join Key Mapping (7 cols) -->
+                <div class="lg:col-span-7 bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-4">
+                    <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <i class="ph ph-link text-blue-600 text-lg"></i>
+                        Cấu hình Khóa liên kết kép (Composite Key)
+                    </h3>
+                    <p class="text-xs text-slate-500">Hệ thống tự động ghép cặp cột tương ứng giữa 2 file. Bạn có thể điều chỉnh lại nếu tiêu đề cột bị sai lệch.</p>
+
+                    <!-- Key 1: Số hiệu tờ bản đồ -->
+                    <div class="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs space-y-2">
+                        <div class="text-xs font-bold text-slate-600 uppercase tracking-wider">Khóa 1: Số hiệu tờ bản đồ</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-11 gap-2 items-center">
+                            <div class="sm:col-span-5">
+                                <label class="block text-[11px] text-blue-700 font-medium mb-1">Cột tại File B (VNLIS)</label>
+                                <select id="map-b-to" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500"></select>
+                            </div>
+                            <div class="sm:col-span-1 text-center font-bold text-slate-400 pt-4">=</div>
+                            <div class="sm:col-span-5">
+                                <label class="block text-[11px] text-indigo-700 font-medium mb-1">Cột tại File A (ILIS)</label>
+                                <select id="map-a-to" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Key 2: Số thứ tự thửa -->
+                    <div class="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs space-y-2">
+                        <div class="text-xs font-bold text-slate-600 uppercase tracking-wider">Khóa 2: Số thứ tự thửa đất</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-11 gap-2 items-center">
+                            <div class="sm:col-span-5">
+                                <label class="block text-[11px] text-blue-700 font-medium mb-1">Cột tại File B (VNLIS)</label>
+                                <select id="map-b-thua" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500"></select>
+                            </div>
+                            <div class="sm:col-span-1 text-center font-bold text-slate-400 pt-4">=</div>
+                            <div class="sm:col-span-5">
+                                <label class="block text-[11px] text-indigo-700 font-medium mb-1">Cột tại File A (ILIS)</label>
+                                <select id="map-a-thua" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Columns Mapping on File A (Cột V & Cột T) -->
+                    <div class="bg-indigo-50/70 p-3.5 rounded-lg border border-indigo-200 shadow-xs space-y-2.5">
+                        <div class="text-xs font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="ph ph-columns text-sm"></i> Các cột kiểm tra bổ sung trên File A (ILIS)
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-indigo-900 font-medium mb-1">Cột V: Mã định danh thửa đất (ĐK 2)</label>
+                                <select id="map-a-madinhdanh" class="w-full text-xs rounded-lg border-indigo-300 border p-2 bg-white focus:ring-2 focus:ring-indigo-500"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-indigo-900 font-medium mb-1">Cột T: Mô tả trạng thái (ĐK 3)</label>
+                                <select id="map-a-mota" onchange="populateMoTaValues()" class="w-full text-xs rounded-lg border-indigo-300 border p-2 bg-white focus:ring-2 focus:ring-indigo-500"></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Filter Column J on File B (5 cols) -->
+                <div class="lg:col-span-5 bg-slate-50 rounded-xl p-5 border border-slate-200 flex flex-col justify-between">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <i class="ph ph-funnel text-amber-600 text-lg"></i>
+                                Lọc nền File B (Cột J - Phân loại thửa đất)
+                            </h3>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Cột phân loại thửa đất trên File B</label>
+                            <select id="filter-col-b" onchange="populateFilterValues()" class="w-full text-xs rounded-lg border-slate-300 border p-2 bg-white focus:ring-2 focus:ring-blue-500"></select>
+                        </div>
+
+                        <!-- Filter Values Box -->
+                        <div class="bg-white border border-slate-200 rounded-lg p-3">
+                            <div class="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
+                                <input type="text" id="filter-search" onkeyup="filterCheckboxList()" placeholder="Tìm giá trị lọc..." class="text-xs border border-slate-200 rounded px-2 py-1 w-1/2 focus:outline-none focus:border-blue-500">
+                                <div class="flex items-center gap-2 text-[11px]">
+                                    <button type="button" onclick="toggleAllFilterCheckboxes(true)" class="text-blue-600 hover:underline font-medium">Chọn tất cả</button>
+                                    <span class="text-slate-300">|</span>
+                                    <button type="button" onclick="toggleAllFilterCheckboxes(false)" class="text-slate-500 hover:underline">Bỏ chọn</button>
+                                </div>
+                            </div>
+                            <div id="filter-values-list" class="max-h-44 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                                <p class="text-slate-400 italic text-center py-4">Vui lòng tải File B để hiển thị danh sách giá trị...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 text-[11px] text-slate-500 bg-white px-3 py-2 rounded-lg border border-slate-200">
+                        <i class="ph ph-info text-blue-600"></i> Chỉ các thửa thuộc <b>Phân loại thửa đất</b> được chọn ở trên mới tham gia kiểm tra Điều kiện 1, 2 và 3.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 3: Sequential Rules Configuration (ĐK 1, ĐK 2, ĐK 3) -->
+        <section id="section-rules" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 opacity-50 pointer-events-none transition-opacity duration-200">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-2.5">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">3</span>
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800">Quy tắc Truy vấn & Kết xuất nối tiếp vào cột <code class="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded font-mono text-sm">So_sanh</code></h2>
+                        <p class="text-xs text-slate-500">Các điều kiện được kiểm tra tuần tự và ghép nối nhãn vào cột cuối cùng của File B</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
+                    <span class="text-slate-600 font-medium">Dấu phân cách nhãn nối tiếp:</span>
+                    <select id="opt-concat-sep" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none">
+                        <option value=", ">Dấu phẩy (, )</option>
+                        <option value="; ">Dấu chấm phẩy (; )</option>
+                        <option value=" | ">Dấu gạch đứng ( | )</option>
+                        <option value="_">Dấu gạch dưới (_)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <!-- Condition 1: Ko_co_ILIS -->
+                <div class="border border-rose-200 bg-rose-50/30 rounded-xl p-4 flex flex-col justify-between">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-rose-700 bg-rose-100 px-2.5 py-1 rounded-md">Điều kiện 1</span>
+                            <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                                <input type="checkbox" id="chk-cond-1" checked class="rounded text-rose-600 focus:ring-rose-500 w-4 h-4">
+                                <span>Kích hoạt</span>
+                            </label>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800">Không tồn tại trong File A (ILIS)</h3>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Thửa đất thỏa điều kiện lọc trên File B nhưng khóa liên kết <b>(Tờ + Thửa)</b> không tìm thấy trong File A.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-rose-200/70 flex items-center justify-between text-xs">
+                        <span class="text-slate-500">Nhãn ghi nhận:</span>
+                        <span class="font-mono font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">Ko_co_ILIS</span>
+                    </div>
+                </div>
+
+                <!-- Condition 2: Ko_KG -->
+                <div class="border border-amber-200 bg-amber-50/30 rounded-xl p-4 flex flex-col justify-between">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md">Điều kiện 2 (Nối tiếp)</span>
+                            <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                                <input type="checkbox" id="chk-cond-2" checked class="rounded text-amber-600 focus:ring-amber-500 w-4 h-4">
+                                <span>Kích hoạt</span>
+                            </label>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800">Thiếu Mã định danh thửa đất (Cột V)</h3>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Thửa đất <b>có tồn tại</b> trong File A (ILIS), nhưng giá trị tại <b>Cột V (Mã định danh thửa đất)</b> bị rỗng / trống.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-amber-200/70 flex items-center justify-between text-xs">
+                        <span class="text-slate-500">Nhãn ghi nhận:</span>
+                        <span class="font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Ko_KG</span>
+                    </div>
+                </div>
+
+                <!-- Condition 3: Cột T (Mô tả) -->
+                <div class="border border-purple-200 bg-purple-50/30 rounded-xl p-4 flex flex-col justify-between">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-purple-800 bg-purple-100 px-2.5 py-1 rounded-md">Điều kiện 3 (Nối tiếp)</span>
+                            <span class="text-[11px] font-medium text-purple-700">Cột T (Mô tả) File A</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800">Kiểm tra trạng thái Mô tả trên ILIS</h3>
+                        
+                        <div class="space-y-2 pt-1">
+                            <label class="flex items-start gap-2 p-2 rounded-lg bg-white border border-purple-200/80 cursor-pointer hover:bg-purple-50/50 transition">
+                                <input type="checkbox" id="chk-cond-3a" checked class="mt-0.5 rounded text-purple-600 focus:ring-purple-500 w-4 h-4 shrink-0">
+                                <div class="text-xs leading-tight">
+                                    <div class="font-semibold text-slate-800">Chưa đối soát</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Ghi nhãn: <code class="font-mono font-bold text-purple-700">chua_doi_soat</code></div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2 p-2 rounded-lg bg-white border border-purple-200/80 cursor-pointer hover:bg-purple-50/50 transition">
+                                <input type="checkbox" id="chk-cond-3b" checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
+                                <div class="text-xs leading-tight">
+                                    <div class="font-semibold text-slate-800">Chưa có hồ sơ quét giấy chứng nhận</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Ghi nhãn: <code class="font-mono font-bold text-indigo-700">chua_GCN</code></div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Preview distinct values in Column T -->
+                        <div id="mota-detected-info" class="text-[11px] text-slate-500 bg-white/80 px-2.5 py-1.5 rounded border border-slate-200/80 hidden">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Run Button -->
+            <div class="mt-6 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="text-xs text-slate-500 flex items-center gap-2">
+                    <i class="ph ph-sparkle text-blue-600 text-base"></i>
+                    <span>Ví dụ kết quả nối tiếp cột <code class="font-mono font-bold text-slate-700">So_sanh</code>: <span class="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">Ko_KG, chua_doi_soat, chua_GCN</span></span>
+                </div>
+                <button id="btn-run-query" onclick="executeComparison()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-6 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm cursor-pointer disabled:opacity-50">
+                    <i class="ph ph-play-circle text-lg"></i>
+                    <span>CHẠY TRUY VẤN & ĐỐI SOÁT DỮ LIỆU</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 4: Results & Export -->
+        <section id="section-results" class="hidden space-y-6">
+            <!-- KPI Cards (7 cards responsive grid) -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                    <div class="text-[11px] font-medium text-slate-500">Tổng dòng File B</div>
+                    <div id="kpi-total-b" class="text-xl font-bold text-slate-800 mt-1">0</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">Form TK cả nước</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-blue-200 shadow-xs bg-blue-50/30">
+                    <div class="text-[11px] font-medium text-blue-700">Thỏa lọc Cột J</div>
+                    <div id="kpi-filtered-b" class="text-xl font-bold text-blue-700 mt-1">0</div>
+                    <div class="text-[10px] text-blue-600/80 mt-0.5">Đưa vào đối soát</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-rose-300 shadow-xs bg-rose-50/50">
+                    <div class="text-[11px] font-bold text-rose-700">ĐK 1: Ko_co_ILIS</div>
+                    <div id="kpi-missing-ilis" class="text-xl font-extrabold text-rose-600 mt-1">0</div>
+                    <div class="text-[10px] text-rose-600/80 mt-0.5">Có B, thiếu A</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-amber-300 shadow-xs bg-amber-50/50">
+                    <div class="text-[11px] font-bold text-amber-800">ĐK 2: Ko_KG</div>
+                    <div id="kpi-ko-kg" class="text-xl font-extrabold text-amber-700 mt-1">0</div>
+                    <div class="text-[10px] text-amber-700/80 mt-0.5">Trống cột V (ILIS)</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-purple-300 shadow-xs bg-purple-50/50">
+                    <div class="text-[11px] font-bold text-purple-800">ĐK 3a: chua_doi_soat</div>
+                    <div id="kpi-chua-doisoat" class="text-xl font-extrabold text-purple-700 mt-1">0</div>
+                    <div class="text-[10px] text-purple-700/80 mt-0.5">Cột T: Chưa đối soát</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-indigo-300 shadow-xs bg-indigo-50/50">
+                    <div class="text-[11px] font-bold text-indigo-800">ĐK 3b: chua_GCN</div>
+                    <div id="kpi-chua-gcn" class="text-xl font-extrabold text-indigo-700 mt-1">0</div>
+                    <div class="text-[10px] text-indigo-700/80 mt-0.5">Cột T: Chưa quét GCN</div>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-xl border border-emerald-300 shadow-xs bg-emerald-50/40 col-span-2 sm:col-span-1">
+                    <div class="text-[11px] font-bold text-emerald-800">Tổng dòng đánh dấu</div>
+                    <div id="kpi-flagged-total" class="text-xl font-extrabold text-emerald-700 mt-1">0</div>
+                    <div class="text-[10px] text-emerald-700/80 mt-0.5">Có dữ liệu So_sanh</div>
+                </div>
+            </div>
+
+            <!-- Export Control Panel -->
+            <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="space-y-2">
+                    <div class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <i class="ph ph-export text-base"></i> Tùy chọn kết xuất dữ liệu Excel (B_VNLIS_KetQua_SoSanh.xlsx — Kèm sheet thong_ke & định dạng tiêu đề)
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 pt-0.5">
+                        <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="export-mode" value="flagged_only" checked class="text-emerald-500 focus:ring-emerald-500 w-4 h-4">
+                            <span><b>Chỉ xuất các dòng theo điều kiện lọc</b> (Thỏa lọc Cột J / có nhãn ở cột <code class="text-amber-300">So_sanh</code>)</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="export-mode" value="all_rows" class="text-emerald-500 focus:ring-emerald-500 w-4 h-4">
+                            <span><b>Xuất toàn bộ dữ liệu gốc File B</b> (Giữ nguyên tất cả dòng + cột <code class="text-amber-300">So_sanh</code>)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button id="btn-export-excel" onclick="exportResultExcel()" class="bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-slate-950 font-bold px-5 py-3 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50">
+                    <i class="ph ph-microsoft-excel-logo text-lg"></i>
+                    <span>XUẤT FILE B_VNLIS_KetQua_SoSanh.xlsx</span>
+                </button>
+            </div>
+
+            <!-- Table Container -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- Filter Tabs & Search Toolbar -->
+                <div class="p-4 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-slate-50/70">
+                    <div class="flex flex-wrap items-center gap-1.5" id="preview-tabs">
+                        <button onclick="switchPreviewTab('flagged')" data-tab="flagged" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white shadow-xs transition cursor-pointer">
+                            Tất cả dòng có nhãn (<span id="badge-flagged">0</span>)
+                        </button>
+                        <button onclick="switchPreviewTab('Ko_co_ILIS')" data-tab="Ko_co_ILIS" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-rose-700 border border-slate-300 hover:bg-rose-50 transition cursor-pointer">
+                            Ko_co_ILIS (<span id="badge-kocoilis">0</span>)
+                        </button>
+                        <button onclick="switchPreviewTab('Ko_KG')" data-tab="Ko_KG" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-amber-800 border border-slate-300 hover:bg-amber-50 transition cursor-pointer">
+                            Ko_KG (<span id="badge-kokg">0</span>)
+                        </button>
+                        <button onclick="switchPreviewTab('chua_doi_soat')" data-tab="chua_doi_soat" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-purple-800 border border-slate-300 hover:bg-purple-50 transition cursor-pointer">
+                            chua_doi_soat (<span id="badge-chuadoisoat">0</span>)
+                        </button>
+                        <button onclick="switchPreviewTab('chua_GCN')" data-tab="chua_GCN" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-indigo-800 border border-slate-300 hover:bg-indigo-50 transition cursor-pointer">
+                            chua_GCN (<span id="badge-chuagcn">0</span>)
+                        </button>
+                        <button onclick="switchPreviewTab('all')" data-tab="all" class="preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition cursor-pointer">
+                            Toàn bộ File B (<span id="badge-all">0</span>)
+                        </button>
+                    </div>
+
+                    <div class="relative shrink-0">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input type="text" id="table-search" onkeyup="onTableSearch()" placeholder="Tìm số tờ, số thửa, nhãn So_sanh..." 
+                               class="pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64">
+                    </div>
+                </div>
+
+                <!-- Data Preview Table -->
+                <div class="overflow-x-auto max-h-[520px]">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead id="preview-thead" class="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-xs">
+                            <!-- Rendered dynamically -->
+                        </thead>
+                        <tbody id="preview-tbody" class="divide-y divide-slate-200">
+                            <!-- Rendered dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                    <div class="flex items-center gap-3">
+                        <span id="pagination-info">Hiển thị 0 - 0 trên tổng số 0 dòng</span>
+                        <select id="page-size-select" onchange="onPageSizeChange()" class="text-xs border border-slate-300 rounded px-2 py-1 bg-white text-slate-700 focus:outline-none">
+                            <option value="50">50 dòng/trang</option>
+                            <option value="100">100 dòng/trang</option>
+                            <option value="200" selected>200 dòng/trang (Tối đa)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="changePage(-1)" id="btn-prev-page" class="px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer">Trước</button>
+                        <span id="page-indicator" class="px-3 py-1.5 font-medium">Trang 1 / 1</span>
+                        <button onclick="changePage(1)" id="btn-next-page" class="px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer">Sau</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-300 border-t border-slate-800 py-4 mt-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs gap-2">
+            <div class="flex items-center gap-2 font-semibold text-white">
+                <i class="ph ph-buildings text-blue-400 text-base"></i>
+                <span>Nguồn: Phòng CSDL - Văn phòng đăng ký đất đai tỉnh An Giang</span>
+            </div>
+            <span class="text-slate-400">Công cụ Đối soát Dữ liệu Địa chính (VNLIS - ILIS) • Tối ưu xử lý dữ liệu lớn (.XLS, .XLSX, .CSV)</span>
+        </div>
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+        /**
+         * MEMORY-SAFE STATE MANAGEMENT
+         * Lưu trữ mảng dữ liệu dạng chuỗi gọn nhẹ và tự động giải phóng Workbook/ArrayBuffer ngay sau khi đọc.
+         */
+        const appState = {
+            fileB: {
+                isLoaded: false,
+                fileBuffer: null,
+                sheetNames: [],
+                fileName: '',
+                sheetName: '',
+                rawRows: [],
+                merges: [],
+                headerRowIdx: 0,
+                dataStartIdx: 1,
+                headers: [],
+                records: []
+            },
+            fileA: {
+                isLoaded: false,
+                fileBuffer: null,
+                sheetNames: [],
+                fileName: '',
+                sheetName: '',
+                rawRows: [],
+                headerRowIdx: 7,
+                dataStartIdx: 9,
+                headers: [],
+                records: []
+            },
+            result: {
+                processedRows: [],      // Toàn bộ dòng dữ liệu File B kèm soSanh & tags
+                filteredCondRows: [],   // Các dòng thỏa điều kiện lọc Cột J
+                flaggedRows: [],        // Các dòng có nhãn trong So_sanh
+                activeTab: 'flagged',
+                searchQuery: '',
+                currentPage: 1,
+                pageSize: 200,
+                stats: {
+                    totalB: 0,
+                    filteredB: 0,
+                    totalA: 0,
+                    koCoIlisCount: 0,
+                    koKgCount: 0,
+                    chuaDoiSoatCount: 0,
+                    chuaGcnCount: 0,
+                    flaggedTotalCount: 0
+                }
+            }
+        };
+
+        /**
+         * UPDATE PROGRESS BAR & MEMORY INDICATOR
+         */
+        function setProgress(visible, label = '', percent = 0) {
+            const banner = document.getElementById('progress-banner');
+            if (!visible) {
+                banner.classList.add('hidden');
+                return;
+            }
+            banner.classList.remove('hidden');
+            document.getElementById('progress-label').textContent = label;
+            const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+            document.getElementById('progress-bar').style.width = clamped + '%';
+            document.getElementById('progress-percent').textContent = clamped + '%';
+        }
+
+        function updateMemoryStatus() {
+            const textEl = document.getElementById('memory-status-text');
+            const rowsB = appState.fileB.records.length;
+            const rowsA = appState.fileA.records.length;
+            if (performance && performance.memory) {
+                const usedMB = (performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+                textEl.textContent = `RAM: ${usedMB} MB | B:${rowsB.toLocaleString()} A:${rowsA.toLocaleString()}`;
+            } else {
+                textEl.textContent = `B: ${rowsB.toLocaleString()} dòng | A: ${rowsA.toLocaleString()} dòng`;
+            }
+        }
+
+        /**
+         * DRAG AND DROP SETUP
+         */
+        ['B', 'A'].forEach(type => {
+            const dz = document.getElementById(`dropzone-${type.toLowerCase()}`);
+            dz.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dz.classList.add('drop-zone-active');
+            });
+            dz.addEventListener('dragleave', () => {
+                dz.classList.remove('drop-zone-active');
+            });
+            dz.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dz.classList.remove('drop-zone-active');
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const input = document.getElementById(`input-file-${type.toLowerCase()}`);
+                    input.files = e.dataTransfer.files;
+                    handleFileUpload({ target: input }, type);
+                }
+            });
+        });
+
+        /**
+         * NOTIFICATION TOAST SYSTEM
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const styles = {
+                info: 'bg-slate-800 text-white border-slate-700',
+                success: 'bg-emerald-700 text-white border-emerald-600',
+                warning: 'bg-amber-600 text-white border-amber-500',
+                error: 'bg-rose-700 text-white border-rose-600'
+            };
+
+            const icons = {
+                info: 'ph-info',
+                success: 'ph-check-circle',
+                warning: 'ph-warning',
+                error: 'ph-x-circle'
+            };
+
+            toast.className = `${styles[type]} border px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-xs font-medium transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `
+                <i class="ph ${icons[type]} text-lg shrink-0"></i>
+                <span class="leading-relaxed">${message}</span>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4500);
+        }
+
+        /**
+         * UTILITY: Normalize Vietnamese text for fuzzy matching
+         */
+        function normalizeVi(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        /**
+         * UTILITY: Convert 0-based column index to Excel Column Letter (0 -> A, 9 -> J, 19 -> T, 21 -> V)
+         */
+        function colIndexToLetter(idx) {
+            let letter = '';
+            let temp = idx;
+            while (temp >= 0) {
+                letter = String.fromCharCode((temp % 26) + 65) + letter;
+                temp = Math.floor(temp / 26) - 1;
+            }
+            return letter;
+        }
+
+        /**
+         * HANDLE EXCEL FILE UPLOAD (MEMORY-OPTIMIZED)
+         * Chỉ giải nén đúng sheet cần dùng, chuyển thành mảng 2D raw:false và giải phóng Workbook ngay lập tức.
+         */
+        function handleFileUpload(event, fileType) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const key = fileType === 'B' ? 'fileB' : 'fileA';
+            const lowerType = fileType.toLowerCase();
+
+            document.getElementById(`status-${lowerType}`).textContent = 'Đang đọc file...';
+            document.getElementById(`status-${lowerType}`).className = 'text-xs font-medium text-amber-600';
+            setProgress(true, `Đang nạp và giải mã tệp ${file.name}...`, 25);
+
+            // Giải phóng dữ liệu cũ trước khi nạp file mới
+            appState[key].rawRows = [];
+            appState[key].records = [];
+            appState[key].fileBuffer = null;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                setTimeout(() => {
+                    try {
+                        let arrayBuffer = e.target.result;
+                        // Đọc metadata danh sách sheet trước (bookSheets: true) để tiết kiệm RAM
+                        const metaWb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', bookSheets: true });
+                        const sheetNames = metaWb.SheetNames || [];
+
+                        appState[key].fileBuffer = arrayBuffer;
+                        appState[key].sheetNames = sheetNames;
+                        appState[key].fileName = file.name;
+                        appState[key].isLoaded = true;
+
+                        document.getElementById(`filename-${lowerType}`).innerHTML = `
+                            <span class="font-bold text-slate-900">${escapeHtml(file.name)}</span> 
+                            <span class="text-xs text-slate-500">(${(file.size / 1024).toFixed(1)} KB)</span>
+                        `;
+
+                        const sheetSelect = document.getElementById(`sheet-${lowerType}`);
+                        sheetSelect.innerHTML = '';
+
+                        const targetKeyword = fileType === 'B' ? 'form tk ca nuoc' : 'tonghop';
+                        const expectedLabel = fileType === 'B' ? 'Form TK cả nước' : 'TongHop';
+                        let matchedSheet = sheetNames[0];
+                        let isExactMatch = false;
+
+                        sheetNames.forEach(name => {
+                            const opt = document.createElement('option');
+                            opt.value = name;
+                            opt.textContent = name;
+                            sheetSelect.appendChild(opt);
+
+                            const normName = normalizeVi(name).replace(/\s+/g, '');
+                            const normTarget = targetKeyword.replace(/\s+/g, '');
+                            if (normName.includes(normTarget)) {
+                                matchedSheet = name;
+                                isExactMatch = true;
+                            }
+                        });
+
+                        sheetSelect.value = matchedSheet;
+                        document.getElementById(`config-${lowerType}`).classList.remove('hidden');
+
+                        setProgress(true, `Đang trích xuất dữ liệu sheet "${matchedSheet}"...`, 65);
+                        loadSheetAndDetectStructure(fileType, matchedSheet);
+
+                        document.getElementById(`status-${lowerType}`).textContent = 'Đã tải xong';
+                        document.getElementById(`status-${lowerType}`).className = 'text-xs font-semibold text-emerald-600';
+                        setProgress(false);
+
+                        if (!isExactMatch) {
+                            showToast(`Không tìm thấy sheet "${expectedLabel}" trong ${file.name}. Hệ thống tự động chọn sheet đầu tiên "${matchedSheet}".`, 'warning');
+                        } else {
+                            showToast(`Đã tải thành công ${file.name} (Sheet: ${matchedSheet})`, 'success');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        setProgress(false);
+                        document.getElementById(`status-${lowerType}`).textContent = 'Lỗi đọc file';
+                        document.getElementById(`status-${lowerType}`).className = 'text-xs font-semibold text-rose-600';
+                        showToast(`Không thể đọc file ${file.name}. Vui lòng kiểm tra định dạng Excel.`, 'error');
+                    }
+                }, 20);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * LOAD ONLY SELECTED SHEET & RELEASE WORKBOOK IMMEDIATELY
+         * File B (VNLIS): Header row = 1, Data start row = 2
+         * File A (ILIS): Header row = 8, Data start row = 10
+         */
+        function loadSheetAndDetectStructure(fileType, sheetName) {
+            const key = fileType === 'B' ? 'fileB' : 'fileA';
+            const lowerType = fileType.toLowerCase();
+
+            // Chỉ parse duy nhất sheet được chọn để tránh tràn bộ nhớ với file nhiều sheet
+            let wb = XLSX.read(new Uint8Array(appState[key].fileBuffer), {
+                type: 'array',
+                sheets: [sheetName],
+                cellStyles: false,
+                cellHTML: false,
+                cellFormula: false
+            });
+
+            const worksheet = wb.Sheets[sheetName];
+            const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
+
+            if (fileType === 'B') {
+                appState.fileB.merges = worksheet && worksheet['!merges'] ? JSON.parse(JSON.stringify(worksheet['!merges'])) : [];
+            }
+
+            // Giải phóng ngay workbook tạm khỏi bộ nhớ
+            wb = null;
+
+            appState[key].sheetName = sheetName;
+            appState[key].rawRows = rawRows;
+
+            const defaultHeaderRow1Based = fileType === 'B' ? 1 : 8;
+            const defaultDataRow1Based = fileType === 'B' ? 2 : 10;
+
+            const safeHeaderIdx = Math.min(defaultHeaderRow1Based - 1, Math.max(0, rawRows.length - 1));
+            const safeDataStartIdx = Math.min(defaultDataRow1Based - 1, Math.max(safeHeaderIdx + 1, rawRows.length));
+
+            document.getElementById(`header-row-${lowerType}`).value = safeHeaderIdx + 1;
+            document.getElementById(`data-row-${lowerType}`).value = safeDataStartIdx + 1;
+
+            parseSheetWithConfig(fileType, safeHeaderIdx, safeDataStartIdx);
+        }
+
+        function onSheetChange(fileType) {
+            const lowerType = fileType.toLowerCase();
+            const sheetName = document.getElementById(`sheet-${lowerType}`).value;
+            setProgress(true, `Đang chuyển sang sheet "${sheetName}"...`, 50);
+            setTimeout(() => {
+                loadSheetAndDetectStructure(fileType, sheetName);
+                setProgress(false);
+            }, 15);
+        }
+
+        function onRowConfigChange(fileType) {
+            const lowerType = fileType.toLowerCase();
+            const hRow = Math.max(1, parseInt(document.getElementById(`header-row-${lowerType}`).value) || 1) - 1;
+            const dRow = Math.max(hRow + 1, parseInt(document.getElementById(`data-row-${lowerType}`).value) || (hRow + 2)) - 1;
+            document.getElementById(`data-row-${lowerType}`).value = dRow + 1;
+            parseSheetWithConfig(fileType, hRow, dRow);
+        }
+
+        /**
+         * PARSE HEADERS & DATA RECORDS BASED ON ROW CONFIG
+         */
+        function parseSheetWithConfig(fileType, headerRowIdx, dataStartIdx) {
+            const key = fileType === 'B' ? 'fileB' : 'fileA';
+            const lowerType = fileType.toLowerCase();
+            const rawRows = appState[key].rawRows;
+
+            appState[key].headerRowIdx = headerRowIdx;
+            appState[key].dataStartIdx = dataStartIdx;
+
+            const headerRow = rawRows[headerRowIdx] || [];
+            const parentHeaderRow = headerRowIdx > 0 ? (rawRows[headerRowIdx - 1] || []) : [];
+
+            let maxCols = headerRow.length;
+            for (let r = dataStartIdx; r < Math.min(dataStartIdx + 25, rawRows.length); r++) {
+                if (rawRows[r] && rawRows[r].length > maxCols) {
+                    maxCols = rawRows[r].length;
+                }
+            }
+            if (fileType === 'A' && maxCols < 22) {
+                maxCols = Math.max(maxCols, 22);
+            }
+
+            const headers = [];
+            for (let c = 0; c < maxCols; c++) {
+                const colLetter = colIndexToLetter(c);
+                let cellName = String(headerRow[c] || '').trim().replace(/\s+/g, ' ');
+                if (!cellName && parentHeaderRow[c]) {
+                    cellName = String(parentHeaderRow[c]).trim().replace(/\s+/g, ' ');
+                }
+                const displayName = cellName ? `[Cột ${colLetter}] ${cellName}` : `[Cột ${colLetter}] (Trống)`;
+                headers.push({
+                    index: c,
+                    colLetter: colLetter,
+                    name: cellName,
+                    display: displayName
+                });
+            }
+            appState[key].headers = headers;
+
+            const records = [];
+            for (let r = dataStartIdx; r < rawRows.length; r++) {
+                const row = rawRows[r] || [];
+                let hasContent = false;
+                for (let c = 0; c < row.length; c++) {
+                    if (row[c] !== null && row[c] !== undefined && String(row[c]).trim() !== '') {
+                        hasContent = true;
+                        break;
+                    }
+                }
+                if (hasContent) {
+                    records.push({
+                        originalRowIdx: r,
+                        cells: row
+                    });
+                }
+            }
+            appState[key].records = records;
+
+            document.getElementById(`info-${lowerType}`).innerHTML = `
+                <i class="ph ph-check-circle text-base shrink-0"></i>
+                <span>Tiêu đề: <b>Dòng ${headerRowIdx + 1}</b> | Dữ liệu từ: <b>Dòng ${dataStartIdx + 1}</b> (${records.length.toLocaleString()} dòng dữ liệu, ${maxCols} cột)</span>
+            `;
+
+            updateMemoryStatus();
+            updateMappingUI();
+        }
+
+        /**
+         * POPULATE MAPPING DROPDOWNS & AUTO-MATCH COLUMNS
+         */
+        function updateMappingUI() {
+            const hasB = appState.fileB.isLoaded;
+            const hasA = appState.fileA.isLoaded;
+
+            if (hasB) {
+                populateSelectWithHeaders('map-b-to', appState.fileB.headers, ['so hieu to ban do', 'to ban do', 'so to'], 1);
+                populateSelectWithHeaders('map-b-thua', appState.fileB.headers, ['so thu tu thua', 'so thu tu thua dat', 'thu tu thua', 'so thua'], 2);
+                populateSelectWithHeaders('filter-col-b', appState.fileB.headers, ['phan loai thua dat', 'phan loai thua'], 9);
+                populateFilterValues();
+            }
+
+            if (hasA) {
+                populateSelectWithHeaders('map-a-to', appState.fileA.headers, ['so hieu to ban do', 'to ban do', 'so to'], 2);
+                populateSelectWithHeaders('map-a-thua', appState.fileA.headers, ['so thu tu thua dat', 'so thu tu thua', 'thu tu thua', 'so thua'], 3);
+                // Cột V = index 21 (Mã định danh thửa đất)
+                populateSelectWithHeaders('map-a-madinhdanh', appState.fileA.headers, ['ma dinh danh thua dat', 'ma dinh danh'], 21);
+                // Cột T = index 19 (Mô tả)
+                populateSelectWithHeaders('map-a-mota', appState.fileA.headers, ['mo ta'], 19);
+                populateMoTaValues();
+            }
+
+            const mappingSection = document.getElementById('section-mapping');
+            const rulesSection = document.getElementById('section-rules');
+            if (hasB && hasA) {
+                mappingSection.classList.remove('opacity-50', 'pointer-events-none');
+                rulesSection.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        }
+
+        function populateSelectWithHeaders(selectId, headers, priorityKeywords, fallbackColIdx = 0) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+
+            let selectedIdx = -1;
+
+            headers.forEach(h => {
+                const opt = document.createElement('option');
+                opt.value = h.index;
+                opt.textContent = h.display;
+                select.appendChild(opt);
+            });
+
+            for (const kw of priorityKeywords) {
+                const found = headers.find(h => normalizeVi(h.name) === kw);
+                if (found) {
+                    selectedIdx = found.index;
+                    break;
+                }
+            }
+            if (selectedIdx === -1) {
+                for (const kw of priorityKeywords) {
+                    const found = headers.find(h => normalizeVi(h.name).includes(kw));
+                    if (found) {
+                        selectedIdx = found.index;
+                        break;
+                    }
+                }
+            }
+
+            if (selectedIdx === -1 && fallbackColIdx < headers.length) {
+                selectedIdx = fallbackColIdx;
+            }
+
+            if (selectedIdx >= 0) {
+                select.value = selectedIdx;
+            }
+        }
+
+        /**
+         * INSPECT COLUMN T (MÔ TẢ) VALUES IN FILE A FOR FEEDBACK
+         */
+        function populateMoTaValues() {
+            const colIdx = parseInt(document.getElementById('map-a-mota').value);
+            const records = appState.fileA.records;
+            const infoBox = document.getElementById('mota-detected-info');
+
+            if (isNaN(colIdx) || records.length === 0) {
+                infoBox.classList.add('hidden');
+                return;
+            }
+
+            let countChuaDoiSoat = 0;
+            let countChuaGcn = 0;
+
+            for (let i = 0; i < records.length; i++) {
+                const val = normalizeVi(records[i].cells[colIdx]);
+                if (val.includes('chua doi soat')) countChuaDoiSoat++;
+                if (val.includes('chua co ho so quet giay chung nhan') || val.includes('chua quet giay chung nhan') || val.includes('chua co ho so quet gcn')) {
+                    countChuaGcn++;
+                }
+            }
+
+            infoBox.classList.remove('hidden');
+            infoBox.innerHTML = `Thống kê nhanh trên File A: <b>${countChuaDoiSoat.toLocaleString()}</b> dòng "Chưa đối soát", <b>${countChuaGcn.toLocaleString()}</b> dòng "Chưa quét GCN".`;
+        }
+
+        /**
+         * EXTRACT UNIQUE VALUES FROM FILTER COLUMN J (FILE B)
+         */
+        function populateFilterValues() {
+            const colIdx = parseInt(document.getElementById('filter-col-b').value);
+            const records = appState.fileB.records;
+            const listContainer = document.getElementById('filter-values-list');
+
+            if (isNaN(colIdx) || records.length === 0) {
+                listContainer.innerHTML = '<p class="text-slate-400 italic text-center py-4">Không có dữ liệu cột lọc.</p>';
+                return;
+            }
+
+            const valueCounts = new Map();
+            for (let i = 0; i < records.length; i++) {
+                const rawVal = records[i].cells[colIdx];
+                const strVal = (rawVal === null || rawVal === undefined) ? '' : String(rawVal).trim();
+                valueCounts.set(strVal, (valueCounts.get(strVal) || 0) + 1);
+            }
+
+            const sortedEntries = Array.from(valueCounts.entries()).sort((a, b) => {
+                if (a[0] === '') return 1;
+                if (b[0] === '') return -1;
+                return a[0].localeCompare(b[0], 'vi');
+            });
+
+            listContainer.innerHTML = '';
+            sortedEntries.forEach(([val, count]) => {
+                const isBlank = val === '';
+                const displayLabel = isBlank ? '(Trống / Blank)' : val;
+                const itemDiv = document.createElement('label');
+                itemDiv.className = 'filter-item flex items-center justify-between p-1.5 rounded hover:bg-slate-100 cursor-pointer select-none';
+                itemDiv.dataset.search = normalizeVi(displayLabel);
+
+                itemDiv.innerHTML = `
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <input type="checkbox" value="${escapeHtml(val)}" checked class="filter-val-cb rounded text-blue-600 focus:ring-blue-500 shrink-0">
+                        <span class="truncate ${isBlank ? 'italic text-slate-400' : 'text-slate-700 font-medium'}" title="${escapeHtml(displayLabel)}">${escapeHtml(displayLabel)}</span>
+                    </div>
+                    <span class="text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0 ml-2">${count.toLocaleString()}</span>
+                `;
+                listContainer.appendChild(itemDiv);
+            });
+        }
+
+        function filterCheckboxList() {
+            const q = normalizeVi(document.getElementById('filter-search').value);
+            document.querySelectorAll('#filter-values-list .filter-item').forEach(el => {
+                el.style.display = el.dataset.search.includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        function toggleAllFilterCheckboxes(checked) {
+            document.querySelectorAll('#filter-values-list .filter-item').forEach(el => {
+                if (el.style.display !== 'none') {
+                    const cb = el.querySelector('.filter-val-cb');
+                    if (cb) cb.checked = checked;
+                }
+            });
+        }
+
+        /**
+         * KEY & EMPTY VALUE NORMALIZATION HELPERS
+         */
+        function normalizeKeyPart(val, normalizeNum) {
+            if (val === null || val === undefined) return '';
+            let s = String(val).trim();
+            if (s === '') return '';
+            if (normalizeNum && /^\d+$/.test(s)) {
+                s = String(parseInt(s, 10));
+            }
+            return s.toLowerCase();
+        }
+
+        function isEmptyIdentifier(val) {
+            if (val === null || val === undefined) return true;
+            const s = String(val).trim().toLowerCase();
+            return s === '' || s === '-' || s === 'null' || s === 'nan';
+        }
+
+        /**
+         * CHUNKED ASYNC COMPARISON (5,000 ROWS/CHUNK) TO PREVENT UI FREEZE & MEMORY SPIKES
+         */
+        async function executeComparison() {
+            if (!appState.fileB.isLoaded || !appState.fileA.isLoaded) {
+                showToast('Vui lòng tải lên đầy đủ cả 2 file B_VNLIS và A_ILIS trước khi chạy truy vấn.', 'warning');
+                return;
+            }
+
+            const selectedFilterValues = new Set();
+            document.querySelectorAll('.filter-val-cb:checked').forEach(cb => {
+                selectedFilterValues.add(cb.value);
+            });
+
+            if (selectedFilterValues.size === 0) {
+                showToast('Bạn chưa chọn giá trị nào trong điều kiện lọc ở File B!', 'warning');
+                return;
+            }
+
+            const runBtn = document.getElementById('btn-run-query');
+            runBtn.disabled = true;
+
+            const bToIdx = parseInt(document.getElementById('map-b-to').value);
+            const bThuaIdx = parseInt(document.getElementById('map-b-thua').value);
+            const aToIdx = parseInt(document.getElementById('map-a-to').value);
+            const aThuaIdx = parseInt(document.getElementById('map-a-thua').value);
+            const aMaDinhDanhIdx = parseInt(document.getElementById('map-a-madinhdanh').value);
+            const aMoTaIdx = parseInt(document.getElementById('map-a-mota').value);
+            const filterColIdx = parseInt(document.getElementById('filter-col-b').value);
+            const normalizeNum = document.getElementById('opt-normalize-num').checked;
+            const separator = document.getElementById('opt-concat-sep').value;
+
+            const useCond1 = document.getElementById('chk-cond-1').checked;
+            const useCond2 = document.getElementById('chk-cond-2').checked;
+            const useCond3a = document.getElementById('chk-cond-3a').checked;
+            const useCond3b = document.getElementById('chk-cond-3b').checked;
+
+            const CHUNK_SIZE = 5000;
+            const yieldToUI = () => new Promise(resolve => setTimeout(resolve, 0));
+
+            try {
+                // GIAI ĐOẠN 1: Lập chỉ mục tối giản File A (chỉ lưu bitmask cờ trạng thái vào Map để tiết kiệm RAM tối đa)
+                // Bitmask: 1 = isEmptyV, 2 = isChuaDoiSoat, 4 = isChuaGCN
+                const ilisMap = new Map();
+                const recordsA = appState.fileA.records;
+                const totalA = recordsA.length;
+                let validARecordsCount = 0;
+
+                setProgress(true, 'Bước 1/2: Đang lập chỉ mục tra cứu gọn nhẹ từ File A (ILIS)...', 5);
+                await yieldToUI();
+
+                for (let i = 0; i < totalA; i++) {
+                    const cells = recordsA[i].cells;
+                    const toVal = normalizeKeyPart(cells[aToIdx], normalizeNum);
+                    const thuaVal = normalizeKeyPart(cells[aThuaIdx], normalizeNum);
+
+                    if (toVal !== '' || thuaVal !== '') {
+                        validARecordsCount++;
+                        const compositeKey = `${toVal}|||${thuaVal}`;
+
+                        let flags = 0;
+                        if (isEmptyIdentifier(cells[aMaDinhDanhIdx])) flags |= 1;
+
+                        const normMoTa = normalizeVi(cells[aMoTaIdx]);
+                        if (normMoTa.includes('chua doi soat')) flags |= 2;
+                        if (normMoTa.includes('chua co ho so quet giay chung nhan') ||
+                            normMoTa.includes('chua quet giay chung nhan') ||
+                            normMoTa.includes('chua co ho so quet gcn')) {
+                            flags |= 4;
+                        }
+
+                        const prevFlags = ilisMap.get(compositeKey);
+                        ilisMap.set(compositeKey, prevFlags === undefined ? flags : (prevFlags | flags));
+                    }
+
+                    if ((i + 1) % CHUNK_SIZE === 0) {
+                        const pct = 5 + ((i + 1) / Math.max(1, totalA)) * 35;
+                        setProgress(true, `Bước 1/2: Đang lập chỉ mục File A (${(i + 1).toLocaleString()} / ${totalA.toLocaleString()} dòng)...`, pct);
+                        await yieldToUI();
+                    }
+                }
+
+                // GIAI ĐOẠN 2: Đối soát tuần tự File B theo từng lô 5.000 dòng
+                const recordsB = appState.fileB.records;
+                const totalB = recordsB.length;
+                const processedRows = new Array(totalB);
+                const filteredCondRows = [];
+                const flaggedRows = [];
+
+                let filteredBCount = 0;
+                let koCoIlisCount = 0;
+                let koKgCount = 0;
+                let chuaDoiSoatCount = 0;
+                let chuaGcnCount = 0;
+
+                setProgress(true, 'Bước 2/2: Đang đối soát dữ liệu File B qua 3 điều kiện...', 42);
+                await yieldToUI();
+
+                for (let i = 0; i < totalB; i++) {
+                    const rec = recordsB[i];
+                    const cells = rec.cells;
+                    const rawFilterVal = cells[filterColIdx];
+                    const filterStr = (rawFilterVal === null || rawFilterVal === undefined) ? '' : String(rawFilterVal).trim();
+
+                    const toVal = normalizeKeyPart(cells[bToIdx], normalizeNum);
+                    const thuaVal = normalizeKeyPart(cells[bThuaIdx], normalizeNum);
+                    const hasKeyData = (toVal !== '' || thuaVal !== '');
+
+                    const tags = [];
+                    const isFiltered = selectedFilterValues.has(filterStr);
+
+                    if (isFiltered && hasKeyData) {
+                        filteredBCount++;
+                        const compositeKey = `${toVal}|||${thuaVal}`;
+                        const ilisFlags = ilisMap.get(compositeKey);
+
+                        if (ilisFlags === undefined) {
+                            // Điều kiện 1: Không có trong File A
+                            if (useCond1) {
+                                tags.push('Ko_co_ILIS');
+                                koCoIlisCount++;
+                            }
+                        } else {
+                            // Điều kiện 2: Cột V rỗng
+                            if (useCond2 && (ilisFlags & 1)) {
+                                tags.push('Ko_KG');
+                                koKgCount++;
+                            }
+                            // Điều kiện 3a: Cột T "Chưa đối soát"
+                            if (useCond3a && (ilisFlags & 2)) {
+                                tags.push('chua_doi_soat');
+                                chuaDoiSoatCount++;
+                            }
+                            // Điều kiện 3b: Cột T "Chưa có hồ sơ quét giấy chứng nhận"
+                            if (useCond3b && (ilisFlags & 4)) {
+                                tags.push('chua_GCN');
+                                chuaGcnCount++;
+                            }
+                        }
+                    }
+
+                    const soSanhValue = tags.length > 0 ? tags.join(separator) : '';
+                    const rowObj = {
+                        stt: i + 1,
+                        originalRowIdx: rec.originalRowIdx,
+                        cells: cells,
+                        tags: tags,
+                        soSanh: soSanhValue,
+                        isFiltered: isFiltered
+                    };
+
+                    processedRows[i] = rowObj;
+                    if (isFiltered) {
+                        filteredCondRows.push(rowObj);
+                    }
+                    if (tags.length > 0) {
+                        flaggedRows.push(rowObj);
+                    }
+
+                    if ((i + 1) % CHUNK_SIZE === 0) {
+                        const pct = 42 + ((i + 1) / Math.max(1, totalB)) * 55;
+                        setProgress(true, `Bước 2/2: Đang đối soát File B (${(i + 1).toLocaleString()} / ${totalB.toLocaleString()} dòng)...`, pct);
+                        await yieldToUI();
+                    }
+                }
+
+                // Giải phóng Map chỉ mục tạm sau khi đối soát xong
+                ilisMap.clear();
+
+                appState.result.processedRows = processedRows;
+                appState.result.filteredCondRows = filteredCondRows;
+                appState.result.flaggedRows = flaggedRows;
+                appState.result.currentPage = 1;
+                appState.result.searchQuery = '';
+                document.getElementById('table-search').value = '';
+
+                appState.result.stats = {
+                    totalB: totalB,
+                    filteredB: filteredBCount,
+                    totalA: validARecordsCount,
+                    koCoIlisCount: koCoIlisCount,
+                    koKgCount: koKgCount,
+                    chuaDoiSoatCount: chuaDoiSoatCount,
+                    chuaGcnCount: chuaGcnCount,
+                    flaggedTotalCount: flaggedRows.length
+                };
+
+                setProgress(true, 'Đang hiển thị bảng kết quả...', 100);
+                await yieldToUI();
+                renderResultsUI();
+                updateMemoryStatus();
+                setProgress(false);
+
+                showToast(`Đối soát hoàn tất! Có ${flaggedRows.length.toLocaleString()} dòng được ghi nhận vào cột So_sanh.`, 'success');
+            } catch (err) {
+                console.error(err);
+                setProgress(false);
+                showToast('Lỗi trong quá trình đối soát dữ liệu: ' + err.message, 'error');
+            } finally {
+                runBtn.disabled = false;
+            }
+        }
+
+        /**
+         * RENDER KPI CARDS & PREVIEW TABLE (PAGINATED MAX 200 ROWS/PAGE)
+         */
+        function renderResultsUI() {
+            const stats = appState.result.stats;
+            document.getElementById('kpi-total-b').textContent = stats.totalB.toLocaleString();
+            document.getElementById('kpi-filtered-b').textContent = stats.filteredB.toLocaleString();
+            document.getElementById('kpi-missing-ilis').textContent = stats.koCoIlisCount.toLocaleString();
+            document.getElementById('kpi-ko-kg').textContent = stats.koKgCount.toLocaleString();
+            document.getElementById('kpi-chua-doisoat').textContent = stats.chuaDoiSoatCount.toLocaleString();
+            document.getElementById('kpi-chua-gcn').textContent = stats.chuaGcnCount.toLocaleString();
+            document.getElementById('kpi-flagged-total').textContent = stats.flaggedTotalCount.toLocaleString();
+
+            document.getElementById('badge-flagged').textContent = stats.flaggedTotalCount.toLocaleString();
+            document.getElementById('badge-kocoilis').textContent = stats.koCoIlisCount.toLocaleString();
+            document.getElementById('badge-kokg').textContent = stats.koKgCount.toLocaleString();
+            document.getElementById('badge-chuadoisoat').textContent = stats.chuaDoiSoatCount.toLocaleString();
+            document.getElementById('badge-chuagcn').textContent = stats.chuaGcnCount.toLocaleString();
+            document.getElementById('badge-all').textContent = stats.totalB.toLocaleString();
+
+            const resultSection = document.getElementById('section-results');
+            resultSection.classList.remove('hidden');
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            renderTable();
+        }
+
+        function switchPreviewTab(tab) {
+            appState.result.activeTab = tab;
+            appState.result.currentPage = 1;
+
+            document.querySelectorAll('.preview-tab-btn').forEach(btn => {
+                const isSelected = btn.dataset.tab === tab;
+                if (isSelected) {
+                    btn.className = 'preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white shadow-xs transition cursor-pointer';
+                } else {
+                    btn.className = 'preview-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition cursor-pointer';
+                }
+            });
+
+            renderTable();
+        }
+
+        function onTableSearch() {
+            appState.result.searchQuery = normalizeVi(document.getElementById('table-search').value);
+            appState.result.currentPage = 1;
+            renderTable();
+        }
+
+        function onPageSizeChange() {
+            const val = parseInt(document.getElementById('page-size-select').value) || 200;
+            appState.result.pageSize = Math.min(200, Math.max(10, val));
+            appState.result.currentPage = 1;
+            renderTable();
+        }
+
+        function getFilteredDisplayRows() {
+            const tab = appState.result.activeTab;
+            let baseRows = appState.result.processedRows;
+
+            if (tab === 'flagged') {
+                baseRows = appState.result.flaggedRows;
+            } else if (tab !== 'all') {
+                baseRows = appState.result.flaggedRows.filter(r => r.tags.includes(tab));
+            }
+
+            const q = appState.result.searchQuery;
+            if (!q) return baseRows;
+
+            return baseRows.filter(row => {
+                for (let i = 0; i < row.cells.length; i++) {
+                    if (normalizeVi(row.cells[i]).includes(q)) return true;
+                }
+                return normalizeVi(row.soSanh).includes(q);
+            });
+        }
+
+        function renderBadgeHtml(tags) {
+            if (!tags || tags.length === 0) return '';
+            const badgeColors = {
+                'Ko_co_ILIS': 'bg-rose-100 text-rose-800 border-rose-300',
+                'Ko_KG': 'bg-amber-100 text-amber-800 border-amber-300',
+                'chua_doi_soat': 'bg-purple-100 text-purple-800 border-purple-300',
+                'chua_GCN': 'bg-indigo-100 text-indigo-800 border-indigo-300'
+            };
+            return tags.map(t => {
+                const cls = badgeColors[t] || 'bg-slate-100 text-slate-800 border-slate-300';
+                return `<span class="inline-block px-2 py-0.5 rounded border text-[11px] font-bold ${cls}">${escapeHtml(t)}</span>`;
+            }).join(' ');
+        }
+
+        function renderTable() {
+            const headers = appState.fileB.headers;
+            const thead = document.getElementById('preview-thead');
+            const tbody = document.getElementById('preview-tbody');
+
+            let headHtml = '<tr>';
+            headHtml += `<th class="py-3 px-3 border-b border-r border-slate-200 font-semibold text-slate-600 whitespace-nowrap bg-slate-100">#</th>`;
+            headers.forEach(h => {
+                const label = h.name ? `${escapeHtml(h.name)} <span class="text-[10px] text-slate-400 font-normal">(${h.colLetter})</span>` : `Cột ${h.colLetter}`;
+                headHtml += `<th class="py-3 px-3 border-b border-r border-slate-200 font-semibold text-slate-700 whitespace-nowrap">${label}</th>`;
+            });
+            headHtml += `<th class="py-3 px-4 border-b border-slate-200 font-bold text-red-600 bg-blue-100 whitespace-nowrap sticky right-0 shadow-xs">So_sanh</th>`;
+            headHtml += '</tr>';
+            thead.innerHTML = headHtml;
+
+            const displayRows = getFilteredDisplayRows();
+            const totalItems = displayRows.length;
+            const pageSize = Math.min(200, appState.result.pageSize);
+            const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+            if (appState.result.currentPage > totalPages) {
+                appState.result.currentPage = totalPages;
+            }
+
+            const startIdx = (appState.result.currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, totalItems);
+            const pageRows = displayRows.slice(startIdx, endIdx);
+
+            if (pageRows.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="${headers.length + 2}" class="py-10 text-center text-slate-400 italic">
+                            Không tìm thấy bản ghi nào phù hợp với điều kiện hiển thị.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                const parts = [];
+                for (let r = 0; r < pageRows.length; r++) {
+                    const row = pageRows[r];
+                    const hasTags = row.tags.length > 0;
+                    const trClass = hasTags ? 'bg-amber-50/30 hover:bg-amber-50/70' : 'hover:bg-slate-50';
+
+                    parts.push(`<tr class="${trClass} transition-colors">`);
+                    parts.push(`<td class="py-2 px-3 border-r border-slate-200 text-slate-400 font-mono text-[11px]">${row.stt}</td>`);
+
+                    for (let c = 0; c < headers.length; c++) {
+                        const val = row.cells[c] !== undefined && row.cells[c] !== null ? String(row.cells[c]) : '';
+                        parts.push(`<td class="py-2 px-3 border-r border-slate-200 text-slate-700 whitespace-nowrap max-w-xs truncate" title="${escapeHtml(val)}">${escapeHtml(val)}</td>`);
+                    }
+
+                    if (hasTags) {
+                        parts.push(`<td class="py-2 px-4 bg-white/95 whitespace-nowrap sticky right-0 border-l border-slate-200 space-x-1">${renderBadgeHtml(row.tags)}</td>`);
+                    } else {
+                        parts.push(`<td class="py-2 px-4 text-slate-400 bg-white/95 whitespace-nowrap sticky right-0 border-l border-slate-200"></td>`);
+                    }
+                    parts.push('</tr>');
+                }
+                tbody.innerHTML = parts.join('');
+            }
+
+            document.getElementById('pagination-info').textContent = totalItems === 0
+                ? 'Hiển thị 0 dòng'
+                : `Hiển thị ${(startIdx + 1).toLocaleString()} - ${endIdx.toLocaleString()} trên tổng số ${totalItems.toLocaleString()} dòng`;
+            document.getElementById('page-indicator').textContent = `Trang ${appState.result.currentPage} / ${totalPages}`;
+            document.getElementById('btn-prev-page').disabled = appState.result.currentPage <= 1;
+            document.getElementById('btn-next-page').disabled = appState.result.currentPage >= totalPages;
+        }
+
+        function changePage(delta) {
+            appState.result.currentPage += delta;
+            renderTable();
+        }
+
+        /**
+         * MEMORY-SAFE EXCEL EXPORT (`B_VNLIS_KetQua_SoSanh.xlsx`)
+         * - Xây dựng mảng 2D gọn nhẹ, chỉ áp dụng object style cho dòng tiêu đề và ô có dữ liệu ở cột `So_sanh`
+         *   để tránh tạo hàng triệu object style gây tràn RAM trình duyệt với file lớn.
+         */
+        function exportResultExcel() {
+            if (!appState.fileB.isLoaded || appState.result.processedRows.length === 0) {
+                showToast('Chưa có dữ liệu kết quả để xuất file Excel.', 'warning');
+                return;
+            }
+
+            const exportMode = document.querySelector('input[name="export-mode"]:checked').value;
+            // Khi chọn "Chỉ xuất các dòng theo điều kiện lọc": ưu tiên xuất các dòng có kết quả So_sanh;
+            // nếu không có dòng nào dính nhãn lỗi nhưng có dòng thỏa lọc Cột J, xuất các dòng thỏa lọc Cột J.
+            const targetSubset = appState.result.flaggedRows.length > 0
+                ? appState.result.flaggedRows
+                : appState.result.filteredCondRows;
+
+            if (exportMode === 'flagged_only' && targetSubset.length === 0) {
+                showToast('Không có dòng nào thỏa điều kiện lọc để xuất! Bạn có thể chọn chế độ "Xuất toàn bộ dữ liệu gốc File B".', 'warning');
+                return;
+            }
+
+            const exportBtn = document.getElementById('btn-export-excel');
+            exportBtn.disabled = true;
+            setProgress(true, 'Đang khởi tạo cấu trúc tệp Excel B_VNLIS_KetQua_SoSanh.xlsx...', 30);
+
+            setTimeout(() => {
+                try {
+                    const rawRows = appState.fileB.rawRows;
+                    const headerRowIdx = appState.fileB.headerRowIdx;
+                    const dataStartIdx = appState.fileB.dataStartIdx;
+                    const totalCols = appState.fileB.headers.length;
+
+                    const exportAoA = [];
+
+                    if (exportMode === 'flagged_only') {
+                        for (let rIdx = 0; rIdx < dataStartIdx; rIdx++) {
+                            const row = rawRows[rIdx] || [];
+                            const newRow = new Array(totalCols + 1).fill('');
+                            for (let c = 0; c < totalCols; c++) {
+                                if (row[c] !== undefined && row[c] !== null) {
+                                    newRow[c] = row[c];
+                                }
+                            }
+                            if (rIdx === headerRowIdx) {
+                                newRow[totalCols] = 'So_sanh';
+                            }
+                            exportAoA.push(newRow);
+                        }
+
+                        for (let i = 0; i < targetSubset.length; i++) {
+                            const item = targetSubset[i];
+                            const newRow = new Array(totalCols + 1).fill('');
+                            for (let c = 0; c < totalCols; c++) {
+                                if (item.cells[c] !== undefined && item.cells[c] !== null) {
+                                    newRow[c] = item.cells[c];
+                                }
+                            }
+                            newRow[totalCols] = item.soSanh;
+                            exportAoA.push(newRow);
+                        }
+                    } else {
+                        const statusByOriginalRow = new Map();
+                        const proc = appState.result.processedRows;
+                        for (let i = 0; i < proc.length; i++) {
+                            statusByOriginalRow.set(proc[i].originalRowIdx, proc[i].soSanh);
+                        }
+
+                        for (let rIdx = 0; rIdx < rawRows.length; rIdx++) {
+                            const row = rawRows[rIdx] || [];
+                            const newRow = new Array(totalCols + 1).fill('');
+                            for (let c = 0; c < totalCols; c++) {
+                                if (row[c] !== undefined && row[c] !== null) {
+                                    newRow[c] = row[c];
+                                }
+                            }
+
+                            if (rIdx === headerRowIdx) {
+                                newRow[totalCols] = 'So_sanh';
+                            } else if (statusByOriginalRow.has(rIdx)) {
+                                newRow[totalCols] = statusByOriginalRow.get(rIdx);
+                            }
+                            exportAoA.push(newRow);
+                        }
+                        statusByOriginalRow.clear();
+                    }
+
+                    setProgress(true, 'Đang định dạng tiêu đề & bảng thống kê...', 65);
+
+                    const newWs = XLSX.utils.aoa_to_sheet(exportAoA);
+
+                    // Style tiêu đề xanh dương
+                    const headerBlueStyle = {
+                        fill: { patternType: 'solid', fgColor: { rgb: '1D4ED8' } },
+                        font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+                        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                        border: {
+                            top: { style: 'thin', color: { rgb: '1E3A8A' } },
+                            bottom: { style: 'medium', color: { rgb: '1E3A8A' } },
+                            left: { style: 'thin', color: { rgb: '3B82F6' } },
+                            right: { style: 'thin', color: { rgb: '3B82F6' } }
+                        }
+                    };
+
+                    // Style tiêu đề cột cuối `So_sanh`: Nền xanh dương nhạt + Chữ in đậm màu đỏ nổi bật
+                    const soSanhHeaderRedStyle = {
+                        fill: { patternType: 'solid', fgColor: { rgb: 'DBEAFE' } },
+                        font: { name: 'Arial', sz: 11, bold: true, color: { rgb: 'DC2626' } },
+                        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                        border: {
+                            top: { style: 'thin', color: { rgb: '1E3A8A' } },
+                            bottom: { style: 'medium', color: { rgb: 'DC2626' } },
+                            left: { style: 'thin', color: { rgb: '3B82F6' } },
+                            right: { style: 'thin', color: { rgb: '1E3A8A' } }
+                        }
+                    };
+
+                    // Style nhấn cho các ô dữ liệu có nhãn ở cột So_sanh
+                    const soSanhDataStyle = {
+                        font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'B91C1C' } },
+                        alignment: { horizontal: 'left', vertical: 'center' }
+                    };
+
+                    // Chỉ gán style cho dòng tiêu đề và các ô cột So_sanh có nhãn để tối ưu RAM
+                    for (let c = 0; c <= totalCols; c++) {
+                        const cellAddr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
+                        if (!newWs[cellAddr]) {
+                            newWs[cellAddr] = { t: 's', v: '' };
+                        }
+                        newWs[cellAddr].s = (c === totalCols) ? soSanhHeaderRedStyle : headerBlueStyle;
+                    }
+
+                    for (let r = dataStartIdx; r < exportAoA.length; r++) {
+                        const val = exportAoA[r][totalCols];
+                        if (val !== undefined && val !== null && String(val).trim() !== '') {
+                            const cellAddr = XLSX.utils.encode_cell({ r, c: totalCols });
+                            if (newWs[cellAddr]) {
+                                newWs[cellAddr].s = soSanhDataStyle;
+                            }
+                        }
+                    }
+
+                    newWs['!rows'] = [];
+                    newWs['!rows'][headerRowIdx] = { hpt: 28 };
+
+                    if (appState.fileB.merges && appState.fileB.merges.length > 0) {
+                        if (exportMode === 'all_rows') {
+                            newWs['!merges'] = JSON.parse(JSON.stringify(appState.fileB.merges));
+                        } else {
+                            newWs['!merges'] = appState.fileB.merges
+                                .filter(m => m.e.r < dataStartIdx)
+                                .map(m => JSON.parse(JSON.stringify(m)));
+                        }
+                    }
+
+                    // Tính độ rộng cột dựa trên mẫu tối đa 250 dòng đầu để tránh chậm
+                    const colWidths = [];
+                    const sampleLimit = Math.min(exportAoA.length, 250);
+                    for (let c = 0; c <= totalCols; c++) {
+                        let maxLen = 10;
+                        for (let r = headerRowIdx; r < sampleLimit; r++) {
+                            const cellVal = exportAoA[r] ? String(exportAoA[r][c] || '') : '';
+                            if (cellVal.length > maxLen) {
+                                maxLen = Math.min(cellVal.length, 45);
+                            }
+                        }
+                        colWidths.push({ wch: maxLen + 3 });
+                    }
+                    colWidths[totalCols] = { wch: 30 };
+                    newWs['!cols'] = colWidths;
+
+                    // Tạo sheet thống kê `thong_ke`
+                    const statsWs = buildThongKeWorksheet();
+
+                    let newWb = XLSX.utils.book_new();
+                    const safeSheetName = (appState.fileB.sheetName || 'Form TK cả nước').substring(0, 31);
+                    XLSX.utils.book_append_sheet(newWb, newWs, safeSheetName);
+                    XLSX.utils.book_append_sheet(newWb, statsWs, 'thong_ke');
+
+                    setProgress(true, 'Đang ghi tệp tải xuống...', 92);
+                    XLSX.writeFile(newWb, 'B_VNLIS_KetQua_SoSanh.xlsx', { compression: true });
+
+                    // Giải phóng đối tượng workbook tạm sau khi xuất xong
+                    newWb = null;
+                    setProgress(false);
+                    updateMemoryStatus();
+
+                    const modeText = exportMode === 'flagged_only'
+                        ? `${targetSubset.length.toLocaleString()} dòng theo điều kiện lọc`
+                        : 'toàn bộ dữ liệu File B';
+                    showToast(`Đã xuất file B_VNLIS_KetQua_SoSanh.xlsx (${modeText} + sheet thong_ke)!`, 'success');
+                } catch (err) {
+                    console.error(err);
+                    setProgress(false);
+                    showToast('Có lỗi xảy ra khi xuất file Excel: ' + err.message, 'error');
+                } finally {
+                    exportBtn.disabled = false;
+                }
+            }, 30);
+        }
+
+        /**
+         * BUILD `thong_ke` WORKSHEET WITH SUMMARY COUNTS & COMBINATION BREAKDOWN
+         */
+        function buildThongKeWorksheet() {
+            const stats = appState.result.stats;
+            const baseCount = stats.filteredB > 0 ? stats.filteredB : 1;
+            const calcPct = (num) => Number(((num / baseCount) * 100).toFixed(2));
+
+            // Count exact combinations in `So_sanh`
+            const comboCounts = new Map();
+            appState.result.flaggedRows.forEach(row => {
+                const key = row.soSanh;
+                comboCounts.set(key, (comboCounts.get(key) || 0) + 1);
+            });
+            const sortedCombos = Array.from(comboCounts.entries()).sort((a, b) => b[1] - a[1]);
+
+            const aoa = [
+                ['BÁO CÁO THỐNG KÊ KẾT QUẢ ĐỐI SOÁT DỮ LIỆU ĐỊA CHÍNH (VNLIS - ILIS)', '', '', ''],
+                [`Nguồn: Phòng CSDL - Văn phòng đăng ký đất đai tỉnh An Giang | File B: ${appState.fileB.fileName} | File A: ${appState.fileA.fileName}`, '', '', ''],
+                ['', '', '', ''],
+                ['STT', 'Chỉ tiêu / Nhãn cột So_sanh', 'Số lượng thửa', 'Tỷ lệ (%) trên số thửa lọc Cột J'],
+                [1, 'Tổng số dòng dữ liệu File B (VNLIS)', stats.totalB, ''],
+                [2, 'Tổng số thửa thỏa điều kiện lọc Cột J (Phân loại thửa đất)', stats.filteredB, 100],
+                [3, 'Tổng số thửa được ghi nhận nhãn trong cột So_sanh', stats.flaggedTotalCount, calcPct(stats.flaggedTotalCount)],
+                [4, 'Ko_co_ILIS (Có trên File B, không có trên File A - Điều kiện 1)', stats.koCoIlisCount, calcPct(stats.koCoIlisCount)],
+                [5, 'Ko_KG (Thiếu Mã định danh thửa đất tại Cột V File A - Điều kiện 2)', stats.koKgCount, calcPct(stats.koKgCount)],
+                [6, 'chua_doi_soat (Trạng thái "Chưa đối soát" tại Cột T File A - Điều kiện 3)', stats.chuaDoiSoatCount, calcPct(stats.chuaDoiSoatCount)],
+                [7, 'chua_GCN (Trạng thái "Chưa có hồ sơ quét giấy chứng nhận" tại Cột T File A - Điều kiện 3)', stats.chuaGcnCount, calcPct(stats.chuaGcnCount)],
+                ['', '', '', ''],
+                ['STT', 'Chi tiết tổ hợp giá trị xuất hiện tại cột So_sanh', 'Số lượng thửa', 'Tỷ lệ (%) trên tổng dòng đánh dấu']
+            ];
+
+            const comboHeaderRowIdx = 12;
+            const flaggedBase = stats.flaggedTotalCount > 0 ? stats.flaggedTotalCount : 1;
+
+            if (sortedCombos.length === 0) {
+                aoa.push([1, '(Không có bản ghi nào được đánh dấu)', 0, 0]);
+            } else {
+                sortedCombos.forEach(([label, count], idx) => {
+                    const pct = Number(((count / flaggedBase) * 100).toFixed(2));
+                    aoa.push([idx + 1, label, count, pct]);
+                });
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+            // Merge title & subtitle rows
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } }
+            ];
+
+            const borderAll = {
+                top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+                bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+                left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+                right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+            };
+
+            const titleStyle = {
+                font: { name: 'Arial', sz: 13, bold: true, color: { rgb: '1E3A8A' } },
+                alignment: { horizontal: 'center', vertical: 'center' }
+            };
+
+            const subTitleStyle = {
+                font: { name: 'Arial', sz: 9, italic: true, color: { rgb: '475569' } },
+                alignment: { horizontal: 'center', vertical: 'center' }
+            };
+
+            const tblHeaderStyle = {
+                fill: { patternType: 'solid', fgColor: { rgb: '1D4ED8' } },
+                font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: borderAll
+            };
+
+            const highlightRowStyle = {
+                fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } },
+                font: { name: 'Arial', sz: 10, bold: true, color: { rgb: '1E293B' } },
+                border: borderAll
+            };
+
+            const normalRowStyle = {
+                font: { name: 'Arial', sz: 10, color: { rgb: '1E293B' } },
+                border: borderAll
+            };
+
+            for (let r = 0; r < aoa.length; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+
+                    if (r === 0) {
+                        ws[addr].s = titleStyle;
+                    } else if (r === 1) {
+                        ws[addr].s = subTitleStyle;
+                    } else if (r === 3 || r === comboHeaderRowIdx) {
+                        ws[addr].s = tblHeaderStyle;
+                    } else if ((r >= 4 && r <= 10) || r > comboHeaderRowIdx) {
+                        const isHighlight = (r >= 6 && r <= 10);
+                        const baseStyle = isHighlight ? highlightRowStyle : normalRowStyle;
+                        ws[addr].s = {
+                            ...baseStyle,
+                            alignment: {
+                                horizontal: c === 0 ? 'center' : (c >= 2 ? 'right' : 'left'),
+                                vertical: 'center'
+                            }
+                        };
+                        if (c === 2 && typeof ws[addr].v === 'number') {
+                            ws[addr].z = '#,##0';
+                        } else if (c === 3 && typeof ws[addr].v === 'number') {
+                            ws[addr].z = '0.00"%"';
+                        }
+                    }
+                }
+            }
+
+            ws['!rows'] = [
+                { hpt: 26 },
+                { hpt: 18 },
+                { hpt: 12 },
+                { hpt: 24 }
+            ];
+            ws['!rows'][comboHeaderRowIdx] = { hpt: 24 };
+
+            ws['!cols'] = [
+                { wch: 8 },
+                { wch: 62 },
+                { wch: 18 },
+                { wch: 30 }
+            ];
+
+            return ws;
+        }
+
+        /**
+         * RESET SESSION
+         */
+        function resetAll() {
+            location.reload();
+        }
+
+        /**
+         * ESCAPE HTML HELPER
+         */
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
